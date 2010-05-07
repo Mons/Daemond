@@ -1,0 +1,185 @@
+package Daemond::Base;
+
+use uni::perl ':dumper';
+use accessors::fast (
+	# 'ipc',    # ipc. TODO
+	'proc',   # $0 proc operator
+	'score',  # scoreboard
+	'_',      # state var
+);
+# _ - 
+# TODO: ipc
+
+#use Rambler::Daemon::Scoreboard ':const';
+use Hash::Union 'union';
+use Sub::Name;
+
+=for rem
+use constant::def DEBUG => Rambler::Daemon::DEBUG || 0;
+use constant::def +{
+	DEBUG_SC   => DEBUG || Rambler::Daemon::DEBUG_SC   || 0,
+	DEBUG_SIG  => DEBUG || Rambler::Daemon::DEBUG_SIG  || 0,
+	DEBUG_SLOW => DEBUG || Rambler::Daemon::DEBUG_SLOW || 0,
+};
+=cut
+
+use Daemond::Log '$log';
+use subs qw(log die);
+sub log:method { $log }
+
+use Daemond::Proc;
+
+BEGIN {
+	*usleep = sub (;$) { select undef,undef,undef,$_[0] || 0.2 };
+}
+
+sub is_child  { 0 }
+sub is_parent { 0 }
+
+sub init {
+	my $self = shift;
+	$self->next::method(@_);
+	my $args = shift;
+	$self->d->name or croak "I need daemon name";
+	$self->d->proc->name($self->d->name);
+	$self->{proc} ||= Daemond::Proc->new();
+	#$self->init_sig_die;
+	#$self->init_sig_handlers;
+	$self->score( Daemond::Scoreboard->new() ) unless $self->score;
+	return;
+}
+
+sub init_sig_die {
+	my $self = shift;
+	my $oldsigdie = $SIG{__DIE__};
+	my $oldsigwrn = $SIG{__WARN__};
+	$SIG{__DIE__} = subname 'SIGDIE' => sub {
+		CORE::die shift,@_ if $^S;
+		CORE::die shift,@_ if $_[0] =~ m{ at \(eval \d+\) line \d+.\s*$};
+		$self->{_}{shutdown} = $self->{_}{die} = 1;
+		my $trace = '';
+		my $i = 0;
+		while (my @c = caller($i++)) {
+			$trace .= "\t$c[3] at $c[1] line $c[2].\n";
+		}
+		my $msg = "DIEMSG @_";
+		$self->log->critical("Parent=%s/%s, DIE: %s, %s\t%s",getppid(),$self->is_child,$msg,\$msg,$trace);
+		#dump;# if $msg =~ /Attempt to free unreferenced scalar/;
+		goto &$oldsigdie if defined $oldsigdie;
+		exit 255;
+	};
+	my $mywarn = __PACKAGE__.'::__SIG__';
+	if (defined $oldsigwrn and UNIVERSAL::isa($oldsigwrn, $mywarn)) {
+		undef $oldsigwrn;
+	}
+	$SIG{__WARN__} = subname 'SIG:WARN' => sub {
+		if ($self and $self->log) {
+			local $_ = "@_";
+			s{\n+$}{};
+			$self->log->warn($_);
+		}
+		elsif (defined $oldsigwrn) {
+			goto &$oldsigwrn;
+		}
+		else {
+			CORE::warn("$$: @_");
+		}
+	};
+	bless ($SIG{__WARN__}, $mywarn);
+	return;
+}
+
+sub init_sig_handlers {
+	my $self = shift;
+	# Setup SIG listeners
+	# ???: keys %SIG ?
+	my $for = $$;
+	my $mysig = __PACKAGE__.'::__SIG__';
+	for my $sig ( qw(TERM INT HUP USR1 USR2 CHLD) ) {
+		my $old = $SIG{$sig};
+		if (defined $old and UNIVERSAL::isa($old, $mysig)) {
+			undef $old;
+		}
+		$SIG{$sig} = sub {
+			warn "$for/$$ got signal @_";
+			eval {
+				if ($self) {
+					$self->sig(@_);
+				}
+			};
+			warn "Got error in SIG$sig: $@" if $@;
+			goto &$old if defined $old;
+		};
+		bless $SIG{$sig}, $mysig;
+	}
+}
+
+sub diag {
+	my $self = shift;
+	my $fm = shift;
+	$fm =~ s{\n$}{};
+	$self->log->debug($fm,@_);
+	return 1;
+}
+
+sub warn : method {
+	my $self = shift;
+	my $fm = shift;
+	$fm =~ s{\n$}{};
+	$self->log->warn($fm,@_);
+	return;
+}
+
+# Proc methods
+
+sub state {
+	my $self = shift;
+	return '*' unless $self->is_child;
+	$self->log->warn("No scoreboard @{[(caller(1))[1,2]]}"),return '?' unless $self->score;
+	#$self->log->debug("set state to @_") if @_;
+	my $r = $self->score->state(@_);
+	$self->d->proc->state(@_) if @_; # If state changed, update proc;
+	$r;
+}
+
+sub sig {
+	my $self = shift;
+	my $sig = shift;
+	if( my $sigh = $self->can('SIG'.$sig)) {
+		@_ = ($self);
+		goto &$sigh;
+	}
+	$self->log->debug("Got sig $sig, terminating");
+	exit 255;
+}
+
+sub create_session {
+	my $self = shift;
+	# Setup some features
+	
+	$self->{_}{stats} = {
+		start => time,
+		req   => 0,
+	};
+	
+	# $self->ipc( Daemond::IPC->new() ) unless $self->ipc;
+}
+
+sub run {
+	confess "Redefine run in subclass";
+}
+
+sub ipc_message {
+	my $self = shift;
+	croak "Not implemented";
+}
+
+sub shutdown {
+	my $self = shift;
+	$self->d->proc->action('shutting down');
+	$self->{_}{shutdown} = 1 ;                    # prevent race conditions
+	return;
+}
+
+1;
+
