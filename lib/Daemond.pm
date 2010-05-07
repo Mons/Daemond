@@ -82,7 +82,7 @@ sub import {
 			delete ${$clr.'::'}{child}{CODE};
 			return;
 		};
-		for (qw(name children verbose cli proc)) {
+		for (qw(name children verbose cli proc signals)) {
 			*{ $clr .'::'.$_ }  = $pkg->_import_conf_gen($_);
 		}
 	}

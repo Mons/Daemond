@@ -7,7 +7,7 @@ use Daemond::Scoreboard ':const';
 
 use accessors::fast qw(id ppid spec);
 
-#use Time::HiRes qw(sleep time getitimer setitimer ITIMER_VIRTUAL ITIMER_REAL);
+use Time::HiRes qw(sleep time setitimer ITIMER_VIRTUAL);
 
 sub is_child { 1 }
 
@@ -24,7 +24,7 @@ sub SIGTERM {
 	my $self = shift;
 	if($self->{_}{shutdown}) {
 		$self->log->warn("Received TERM during shutdown, force exit");
-		exit( 1 );
+		$self->d->exit( 1 );
 	}
 	$self->stop();
 }
@@ -41,7 +41,6 @@ sub start {
 	#$self->{_}{proc} = 'child';
 	$self->state(STARTING);
 	$self->d->proc->action('child');
-=for rem
 	my $interval = 0.0001;
 	my $wallclock = time;
 	$SIG{VTALRM} = sub {
@@ -63,7 +62,6 @@ sub start {
 		
 	};
 	setitimer ITIMER_VIRTUAL, $interval, 0;
-=cut
 	$self->state(READY);
 	return;
 }
@@ -83,17 +81,13 @@ sub _run {
 
 sub stop_watcher {
 	my $self = shift;
-	#setitimer ITIMER_VIRTUAL, 0, 0;
+	setitimer ITIMER_VIRTUAL, 0, 0;
 	my $timeout = $self->d->exit_timeout;
 	#$self->log->warn("Shutting down with timeout $timeout | "."$self ".$self->d);
 	$self->log->warn("Shutting down with timeout $timeout | "."$self ".$self->d." @{[ values %{ $self->d } ]} ");
 	$SIG{ALRM} = sub {
-		alarm 0;
-		$a = 0;
-		dump if $a;
-		#$self->log->critical("Not exited till alarm, shoot myself in a head");
-		#no warnings 'internal'; # To avoid dying on Attempt to free on unreferenced scalar
-		exit( 0 );
+		$self->log->critical("Not exited till alarm, shoot myself in a head");
+		$self->d->exit( 255 );
 	};
 	alarm $timeout;
 	return;

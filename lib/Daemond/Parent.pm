@@ -99,6 +99,7 @@ sub SIGTERM {
 	$SIG{ALRM} = sub {
 		$self->log->critical("Not exited till alarm, killall myself");
 		kill KILL => -$_,$_ for $self->childs;
+		no warnings 'internal'; # Aviod 'Attempt to free unreferenced scalar' for nester sighandlers
 		exit( 255 );
 	};
 	alarm $timeout;
@@ -298,6 +299,7 @@ sub start_workers {
 	}
 }
 
+sub DO_FORK() { 1 }
 sub fork : method {
 	my ($self,$alias) = @_;
 
@@ -325,7 +327,12 @@ sub fork : method {
 	}
 
 	DEBUG and $self->diag( "Forking a child $alias" );
-	my $pid = fork();                   # try to fork
+	my $pid;
+	if (DO_FORK) {
+		$pid = fork();
+	} else {
+		$pid = 0;
+	}
 	unless ( defined $pid ) {            # did the fork fail?
 		$self->log->critical( "Fork failed: $!" );
 		$self->score->drop($slot);   # give slot back

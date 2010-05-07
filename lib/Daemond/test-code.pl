@@ -35,7 +35,7 @@ child {
 			$self->log->debug("code run!");
 			for (1..10000) { ++$a }
 			if (++$iter == 1) {
-				kill TERM => getppid();
+				#kill TERM => getppid();
 			}
 			sleep 1;
 		};

@@ -62,11 +62,10 @@ sub init_sig_die {
 		while (my @c = caller($i++)) {
 			$trace .= "\t$c[3] at $c[1] line $c[2].\n";
 		}
-		my $msg = "DIEMSG @_";
-		$self->log->critical("Parent=%s/%s, DIE: %s, %s\t%s",getppid(),$self->is_child,$msg,\$msg,$trace);
-		#dump;# if $msg =~ /Attempt to free unreferenced scalar/;
+		my $msg = "@_";
+		$self->log->critical("$$: pp=%s, DIE: %s\n\t%s",getppid(),$msg,$trace);
 		goto &$oldsigdie if defined $oldsigdie;
-		exit 255;
+		$self->d->exit( 255 );
 	};
 	my $mywarn = __PACKAGE__.'::__SIG__';
 	if (defined $oldsigwrn and UNIVERSAL::isa($oldsigwrn, $mywarn)) {
@@ -95,7 +94,8 @@ sub init_sig_handlers {
 	# ???: keys %SIG ?
 	my $for = $$;
 	my $mysig = __PACKAGE__.'::__SIG__';
-	for my $sig ( qw(TERM INT HUP USR1 USR2 CHLD) ) {
+	#for my $sig ( qw(TERM INT HUP USR1 USR2 CHLD) ) {
+	for my $sig ( $self->d->signals ) {
 		my $old = $SIG{$sig};
 		if (defined $old and UNIVERSAL::isa($old, $mysig)) {
 			undef $old;
@@ -150,7 +150,7 @@ sub sig {
 		goto &$sigh;
 	}
 	$self->log->debug("Got sig $sig, terminating");
-	exit 255;
+	$self->d->exit(255);
 }
 
 sub create_session {

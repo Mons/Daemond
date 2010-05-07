@@ -16,7 +16,7 @@ sub run {
 	$SIG{USR2} = sub {
 		if ($self->{_}{shutdown}) {
 			$self->log->alert("USR2: Already shutting down, exit");
-			exit 255;
+			$self->d->exit(255);
 		} else {
 			warn "Stop by USR2";
 			$self->{_}{shutdown} = 1;

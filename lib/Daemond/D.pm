@@ -70,6 +70,13 @@ sub die:method {
 	my $self = shift;
 	my $msg = shift;
 	$self->say('<r>'.$msg,@_);
+	no warnings 'internal'; # Aviod 'Attempt to free unreferenced scalar' for nester sighandlers
+	exit 255;
+}
+sub exit:method {
+	my $self = shift;
+	my $code = shift || 0;
+	no warnings 'internal'; # Aviod 'Attempt to free unreferenced scalar' for nester sighandlers
 	exit 255;
 }
 
@@ -82,9 +89,30 @@ sub new {
 		pid           => Daemond::Void->new(),
 		proc          => Daemond::Void->new(),
 		cli           => Daemond::Void->new(),
+		signals       => [qw(TERM INT HUP USR1 USR2 CHLD)],
 		@_
 	}, $pkg;
 	return $self;
+}
+
+our @SIG;our %SIG_OK;
+BEGIN {
+	use Config;
+	@SIG = split ' ',$Config{sig_name};
+	@SIG_OK{@SIG} = ();
+}
+
+sub signals {
+	my $self = shift;
+	if (@_) {
+		my %sig;
+		@sig{
+			qw(TERM INT CHLD), # Always required
+			(map { defined $_ ? exists $SIG_OK{uc $_} ? uc $_ : croak "Bad signal: $_" : ()  } @_),
+		} = ();
+		$self->{signals} = [keys %sig];
+	}
+	return @{$self->{signals}};
 }
 
 sub configure {
