@@ -38,7 +38,6 @@ sub SIGCHLD {
 
 sub start {
 	my $self = shift;
-	#$self->{_}{proc} = 'child';
 	$self->state(STARTING);
 	$self->d->proc->action('child');
 	my $interval = 0.0001;
@@ -83,8 +82,7 @@ sub stop_watcher {
 	my $self = shift;
 	setitimer ITIMER_VIRTUAL, 0, 0;
 	my $timeout = $self->d->exit_timeout;
-	#$self->log->warn("Shutting down with timeout $timeout | "."$self ".$self->d);
-	$self->log->warn("Shutting down with timeout $timeout | "."$self ".$self->d." @{[ values %{ $self->d } ]} ");
+	$self->log->notice("Shutting down with timeout $timeout");
 	$SIG{ALRM} = sub {
 		$self->log->critical("Not exited till alarm, shoot myself in a head");
 		$self->d->exit( 255 );
@@ -108,7 +106,7 @@ sub run1 {
 	croak "Redefine run in subclass";
 }
 
-sub run {
+sub run2 {
 	my $self = shift;
 	while ( 1 ) {
 		for (1..10000) { ++$a };

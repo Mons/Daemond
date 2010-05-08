@@ -53,6 +53,9 @@ sub init_sig_die {
 	my $self = shift;
 	my $oldsigdie = $SIG{__DIE__};
 	my $oldsigwrn = $SIG{__WARN__};
+	if (defined $oldsigdie and UNIVERSAL::isa($oldsigdie, 'Daemond::SIGNAL')) {
+		undef $oldsigdie;
+	}
 	$SIG{__DIE__} = subname 'SIGDIE' => sub {
 		CORE::die shift,@_ if $^S;
 		CORE::die shift,@_ if $_[0] =~ m{ at \(eval \d+\) line \d+.\s*$};
@@ -67,15 +70,15 @@ sub init_sig_die {
 		goto &$oldsigdie if defined $oldsigdie;
 		$self->d->exit( 255 );
 	};
-	my $mywarn = __PACKAGE__.'::__SIG__';
-	if (defined $oldsigwrn and UNIVERSAL::isa($oldsigwrn, $mywarn)) {
+	bless ($SIG{__DIE__}, 'Daemond::SIGNAL');
+	if (defined $oldsigwrn and UNIVERSAL::isa($oldsigwrn, 'Daemond::SIGNAL')) {
 		undef $oldsigwrn;
 	}
 	$SIG{__WARN__} = subname 'SIG:WARN' => sub {
 		if ($self and $self->log) {
 			local $_ = "@_";
 			s{\n+$}{};
-			$self->log->warn($_);
+			$self->log->warning($_);
 		}
 		elsif (defined $oldsigwrn) {
 			goto &$oldsigwrn;
@@ -84,7 +87,7 @@ sub init_sig_die {
 			CORE::warn("$$: @_");
 		}
 	};
-	bless ($SIG{__WARN__}, $mywarn);
+	bless ($SIG{__WARN__}, 'Daemond::SIGNAL');
 	return;
 }
 
@@ -93,15 +96,14 @@ sub init_sig_handlers {
 	# Setup SIG listeners
 	# ???: keys %SIG ?
 	my $for = $$;
-	my $mysig = __PACKAGE__.'::__SIG__';
+	my $mysig = 'Daemond::SIGNAL';
 	#for my $sig ( qw(TERM INT HUP USR1 USR2 CHLD) ) {
 	for my $sig ( $self->d->signals ) {
 		my $old = $SIG{$sig};
-		if (defined $old and UNIVERSAL::isa($old, $mysig)) {
+		if (defined $old and UNIVERSAL::isa($old, $mysig) or !ref $old) {
 			undef $old;
 		}
 		$SIG{$sig} = sub {
-			warn "$for/$$ got signal @_";
 			eval {
 				if ($self) {
 					$self->sig(@_);

@@ -70,12 +70,14 @@ sub die:method {
 	my $self = shift;
 	my $msg = shift;
 	$self->say('<r>'.$msg,@_);
+	$self->destroy;
 	no warnings 'internal'; # Aviod 'Attempt to free unreferenced scalar' for nester sighandlers
 	exit 255;
 }
 sub exit:method {
 	my $self = shift;
 	my $code = shift || 0;
+	$self->destroy;
 	no warnings 'internal'; # Aviod 'Attempt to free unreferenced scalar' for nester sighandlers
 	exit 255;
 }

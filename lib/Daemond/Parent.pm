@@ -2,7 +2,7 @@ package Daemond::Parent;
 
 sub DEBUG () { 1 }
 sub DEBUG_SIG () { 1 }
-sub DEBUG_SLOW () { 1 }
+sub DEBUG_SLOW () { 0 }
 =for rem
 use constant::def DEBUG => 1;
 use constant::def +{
@@ -39,10 +39,10 @@ sub is_parent  { 1 }
 
 sub init {
 	my $self = shift;
-	$self->log->prefix('CONTROL: ');
+	$self->log->prefix("$$ CONTROL: ");
 	$self->d->configure(@_);
 	$self->getopt();
-	$self->next::method(@_);
+	$self->next::method();
 	$self->d->proc->info( type => 'master' );
 	$self->init_children_config;
 }
@@ -107,7 +107,6 @@ sub SIGTERM {
 
 sub SIGINT {
 	my $self = shift;
-	$self->log->notice("Received INT, shutting down");
 	$self->{_}{shutdown} = 1;
 }
 
@@ -121,25 +120,24 @@ sub SIGCHLD {
 				$died = 1;
 				{
 					local $! = $exitcode;
-					$self->log->warn("CHLD: child $child died with $exitcode ($!) (".($signal ? "sig: $signal, ":'')." core: $core)");
+					$self->log->alert("CHLD: child $child died with $exitcode ($!) (".($signal ? "sig: $signal, ":'')." core: $core)");
 				}
 			} else {
 				if ($signal || $core) {
 					{
 						local $! = $exitcode;
-						$self->log->warn("CHLD: child $child died with $signal (exit: $exitcode/$!, core: $core)");
+						$self->log->alert("CHLD: child $child died with $signal (exit: $exitcode/$!, core: $core)");
 					}
 				}
 				else {
 					# it's ok
-					$self->log->warn("CHLD: child $child normally gone");
+					$self->log->debug("CHLD: child $child normally gone");
 				}
 			}
 			my $pid = $child;
 			if($self->{chld}) {
 				if (defined( my $data=delete $self->{chld}{$pid} )) { # if it was one of ours
 					my $slot = $data->[0];
-					DEBUG and $self->diag( "Parent caught SIGCHLD for $pid.  children: (". join(' ', sort keys %{$self->{chld}}).")" );
 					$self->score->drop($slot);
 					if ($died) {
 						$self->{_}{dies}++;
@@ -187,15 +185,13 @@ sub daemonize {
 	my $self = shift;
 	#warn dumper $self->d;
 	$self->d->say("<g>starting up</>... (pidfile = ".$self->d->pid->file.", pid = <y>$$</>, detach = ".$self->d->detach.")");
-	$self->log->prefix('PARENT: ');
+	$self->log->prefix("$$ PARENT: ");
 	if ($self->d->detach) {
-		$self->log->notice("Do detach");
+		$self->log->debug("Do detach");
 		Daemond::Daemonization->process($self);
 	} else {
-		$self->log->notice("Don't detach from terminal");
+		$self->log->debug("Don't detach from terminal");
 	}
-	$self->log->notice("Ready");
-	#exit;
 }
 
 
@@ -210,7 +206,6 @@ sub start {
 	$self->score->size( $self->{chld_count} ) if $self->{chld_count};
 
 	$self->d->proc->action('ready');
-	$self->log->warn("ready to serve");
 }
 
 sub run {
@@ -220,11 +215,11 @@ sub run {
 	$self->init_sig_die;
 	$self->init_sig_handlers;
 	$self->start;
-	warn "Started!";
+	$self->log->notice("Started ($$)!");
 	while ( 1 ) {
 		$self->d->proc->action('idle');
 		if ($self->{_}{shutdown}) {
-			$self->log->warn("Received shutdown notice, gracefuly terminating...");
+			$self->log->notice("Received shutdown notice, gracefuly terminating...");
 			$self->d->proc->action('shutdown');
 			last;
 		}
@@ -270,7 +265,7 @@ sub check_scoreboard {
 			$self->log->debug("actual childs for $alias ($check{$alias}) != required count ($count). change by $update{$alias}");
 		};
 	}
-	$self->log->debug( "Update: %s",dumper(\%update) ) if %update;
+	$self->log->debug( "Update: %s",join ', ',map { "$_+$update{$_}" } keys %update ) if %update;
 	while ( my ($alias, $count) = each %update ) {
 		if ( $count > 0 ) {
 			$self->start_workers($alias, $count);
@@ -291,7 +286,6 @@ sub start_workers {
 	my $self = shift;
 	my ($alias,$n) = @_;
 	$n > 0 or return;
-	DEBUG and $self->diag( "Fork off $n $alias children" );
 	$self->d->proc->action('forking '.$n);
 	for(1..$n) {
 		$self->{_}{forks}++;
@@ -306,11 +300,10 @@ sub fork : method {
 	# children should not honor this event
 	# Note that the forked POE kernel might have these events in it already
 	# This is unavoidable :-(
-	$self->diag("!!! Child should not be here!"),return if !$self->is_parent;
+	$self->log->alert("!!! Child should not be here!"),return if !$self->is_parent;
 	$self->log->notice("ignore fork due to shutdown"),return if $self->{_}{shutdown};
 
 	####
-	DEBUG and $self->diag( "pending forks=$self->{_}{forks} ([@{[ $self->childs ]}])" );
 	if ( $self->{_}{forks} ) {
 		$self->{_}{forks}--;
 		$self->d->proc->action($self->{_}{forks} ? 'forking '.$self->{_}{forks} : 'idle' );
@@ -326,7 +319,6 @@ sub fork : method {
 		return;
 	}
 
-	DEBUG and $self->diag( "Forking a child $alias" );
 	my $pid;
 	if (DO_FORK) {
 		$pid = fork();
@@ -342,7 +334,7 @@ sub fork : method {
 	
 	if ($pid) {                         # successful fork; parent keeps track
 		$self->{chld}{$pid} = [ $slot, $alias ];
-		DEBUG and $self->diag( "Parent server forked a new child $alias. children: (".join(' ', $self->childs).")" );
+		$self->log->debug( "Parent server forked a new child $alias [slot=$slot]. children: (".join(' ', $self->childs).")" );
 		$self->{_}{live_check}{$pid} = 1;
 
 		if( $self->{_}{forks} == 0 and $self->{_}{startup} ) {
@@ -352,10 +344,11 @@ sub fork : method {
 		return 1;
 	}
 	else {                              # child becomes a child process
-		DEBUG and $self->diag( "I'm forked child with slot $slot." );
+		#DEBUG and $self->diag( "I'm forked child with slot $slot." );
 		$self->log->prefix('CHILD F.'.$alias.':');
 		$self->d->proc->info( state => FORKING, type => "child.$alias" );
-		$SIG{TERM} = sub { $self->log->notice("exit"); exit 0; };
+		$SIG{TERM} = bless(sub { $self->log->alert("after-fork exit"); $self->d->exit(0); }, 'Daemond::SIGNAL');
+		$SIG{INT}  = bless(sub {}, 'Daemond::SIGNAL');
 =for rem
 		while ( 1 ) {
 			sleep 1;
@@ -366,7 +359,6 @@ sub fork : method {
 		my $child = $self->d->child_class;
 		my $childfile = join '/',split '::',$child.'.pm';
 		
-		$self->log->debug('loading class: %s',$child);
 		$self->d->child_class->can('new')
 			or eval "use $child;1"
 			or delete($INC{ $childfile }),die "$@";
@@ -405,23 +397,21 @@ sub fork : method {
 
 sub shutdown {
 	my $self = shift;
-
+	
 	$self->d->proc->action('shutting down');
-	$self->log->notice("Shutdown requested");
-
+	
 	my $finishing = time;
 	my %chld = %{$self->{chld}};
 	if ( $self->{chld} and %chld  ) {
 		# tell children to go away
-		$self->log->notice("TERM'ing children [@{[ keys %chld ]}]");
+		$self->log->debug("TERM'ing children [@{[ keys %chld ]}]");
 		kill TERM => $_ or delete($chld{$_}),$self->warn("Killing $_ failed: $!") for keys %chld;
 	}
-
+	
 	DEBUG_SLOW and sleep(2);
 	$self->next::method(@_);
-	warn "pgrp=".getpgrp();
-
-	$self->log->notice("Reaping kids");
+	
+	$self->log->debug("Reaping kids");
 	my $timeout = $self->d->exit_timeout + 1;
 	while (1) {
 		my $kid = waitpid ( -1,WNOHANG );
@@ -436,15 +426,8 @@ sub shutdown {
 			sleep(0.01);
 		}
 	}
-	$self->log->notice("Finished");
-	$self->exit;
-}
-
-sub exit : method {
-	my $self = shift;
-	$self->d->destroy;
-	warn "TODO: Do something on exit";
-	exit 0;
+	$self->log->debug("Finished");
+	$self->d->exit;
 }
 
 1;

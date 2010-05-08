@@ -6,10 +6,11 @@ use Log::Any ();
 sub new {
 	my $self = bless {}, shift;
 	$self->{log} = shift;
+	$self->{caller} = 0;
 	$self;
 }
 
-our %METHOD = map { $_ => 1 } Log::Any->logging_methods();
+our %METHOD = map { $_ => 1 } Log::Any->logging_methods(),Log::Any->logging_aliases;
 sub prefix {
 	my $self = shift;
 	$self->{prefix} = shift;
@@ -24,7 +25,8 @@ sub  AUTOLOAD {
 		my $can = $self->{log}->can($name);
 		*$AUTOLOAD = sub {
 			my $self = $_[0];
-			@_ = ($self->{log}, $self->{prefix}.$_[1], @_ > 2 ? (@_[2..$#_]) : ());
+			my ($file,$line) = (caller)[1,2];
+			@_ = ($self->{log}, $self->{prefix}.$_[1].($self->{caller} ? " [$file:$line]" : ''), @_ > 2 ? (@_[2..$#_]) : ());
 			goto &$can;
 		};
 		goto &$AUTOLOAD;
@@ -37,6 +39,8 @@ sub  AUTOLOAD {
 		}
 	}
 }
+
+sub DESTROY {}
 
 package Daemond::Log;
 

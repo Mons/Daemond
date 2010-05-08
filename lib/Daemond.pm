@@ -17,21 +17,39 @@ our $VERSION = '0.01';
 
 =head1 SYNOPSIS
 
-Quick summary of what the module does.
+=head2 The simpliest daemon
 
-Perhaps a little code snippet.
+    package Test::Daemon;
+    use strict;
+    use Daemond -parent;
 
-    use Daemond;
+    name 'simple-test';  # Define a name for a daemon
+    cli;                 # Use command-line interface
+    proc;                # Use proc status ($0)
+    children 2;          # How many children to fork
+    child {
+        my $self = shift;
+        warn "Starting child";
+        # You may override $SIG{USR2} here to interrupt operation and leave this sub
+        my $stop = 0;
+        $SIG{USR2} = sub { $stop = 1 };
+        my $iter = 0;
+        while (!$stop) {
+            $self->log->debug("code run!");
+            sleep 1;
+        }
+    };
 
-    my $foo = Daemond->new();
-    ...
+    package main;
 
-=head1 EXPORT
+    Test::Daemon->new({
+        pid      => '/tmp/daemond.simple-test.pid',
+        children => 1,
+    })->run;
 
-A list of functions that can be exported.  You can delete this section
-if you don't export anything, such as for a purely object-oriented module.
+=head2 Daemon with child subclass
 
-=head1 FUNCTIONS
+
 
 =cut
 
@@ -78,6 +96,7 @@ sub import {
 			my $code = shift;
 			require Daemond::ChildCode;
 			$Daemond::ChildCode::CODE = $code;
+			*{ 'Daemond::ChildCode::d' } = sub () { $d };
 			$d->child_class('Daemond::ChildCode');
 			delete ${$clr.'::'}{child}{CODE};
 			return;
@@ -86,18 +105,22 @@ sub import {
 			*{ $clr .'::'.$_ }  = $pkg->_import_conf_gen($_);
 		}
 	}
-	elsif ($opts{child}) {
+	elsif (exists $opts{child}) {
 		push @{ $clr.'::ISA' }, $opts{base} || 'Daemond::Child';
-		if (exists $REGISTRY{ $opts{child} }) {
-			my $d = $REGISTRY{ $opts{child} };
-			if (defined $d->child_class) {
-				croak "`$opts{child}' already have defined child ".$d->child_class;
+		if ($opts{child}) {
+			if (exists $REGISTRY{ $opts{child} }) {
+				my $d = $REGISTRY{ $opts{child} };
+				if (defined $d->child_class) {
+					croak "`$opts{child}' already have defined child ".$d->child_class;
+				} else {
+					$d->child_class($clr);
+					*{ $clr .'::d' } = sub () { $d };
+				}
 			} else {
-				$d->child_class($clr);
-				*{ $clr .'::d' } = sub () { $d };
+				croak "There is no class `$opts{child}' defined as Daemond -parent";
 			}
 		} else {
-			croak "There is no class `$opts{child}' defined as Daemond -parent";
+			#?
 		}
 	}
 	else {

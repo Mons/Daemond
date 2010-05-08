@@ -4,7 +4,7 @@ use uni::perl ':dumper';
 
 our $CODE;
 
-use Daemond -child => 'Test::Daemon';
+use Daemond -child;
 
 sub stop_flag {
 	my $self = shift;

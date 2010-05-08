@@ -6,7 +6,6 @@ use Carp;
 use Cwd ();
 use POSIX qw(O_EXCL O_CREAT O_RDWR); 
 use Fcntl qw(LOCK_SH LOCK_EX LOCK_NB LOCK_UN);
-use subs qw(log die warn);
 use Scalar::Util qw(weaken);
 
 use Daemond::Helpers;
@@ -14,15 +13,6 @@ use Daemond::Log '$log';
 
 sub d();
 sub log { $log }
-sub die {
-	my $e = "@_";$e =~ s{\n$}{};
-	log->crit("$$: $e");
-	exit(255);
-}
-sub warn {
-	my $e = "@_";$e =~ s{\n$}{};
-	log->warn("$$: $e");
-}
 
 our %REGISTRY;
 END {
@@ -38,7 +28,7 @@ sub DESTROY {
 	my $self = shift;
 	delete $REGISTRY{int $self};
 	if ($self->{locked} and $self->{owner} == $$) {
-		warn "Destroying and erasing pid $self by $$";
+		#warn "Destroying and erasing pid $self by $$";
 		$self->unlink;
 	} else {
 		#warn "Destroying anothers ($self->{owner}) pid $self by $$";
