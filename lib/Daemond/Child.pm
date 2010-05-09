@@ -1,8 +1,7 @@
 package Daemond::Child;
 
 use uni::perl;
-use Daemond::Base;
-BEGIN { push our @ISA, 'Daemond::Base' }
+use base 'Daemond::Base';
 use Daemond::Scoreboard ':const';
 
 use accessors::fast qw(id ppid spec);
@@ -102,7 +101,7 @@ sub stop {
 	$self->stop_flag;
 }
 
-sub run1 {
+sub run {
 	croak "Redefine run in subclass";
 }
 
@@ -125,8 +124,7 @@ sub run2 {
 sub shutdown {
 	my $self = shift;
 	$self->next::method();
-	$self->log->notice("now, exit");
-	exit 0;
+	$self->d->exit();
 }
 
 1;

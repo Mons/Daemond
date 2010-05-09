@@ -3,6 +3,16 @@ package Daemond::D;
 use uni::perl ':dumper';
 use Daemond::Void;
 
+our $D;
+sub import {
+	my $pk = shift;
+	$D ||= $pk->new( cmd => "$0" );
+	$D->configure(@_);
+	no strict 'refs';
+	*{ caller().'::d' } = sub () { $D };
+	return;
+}
+
 our %COLOR = (
 	'/'        => 0,
     clear      => 0,
@@ -79,12 +89,13 @@ sub exit:method {
 	my $code = shift || 0;
 	$self->destroy;
 	no warnings 'internal'; # Aviod 'Attempt to free unreferenced scalar' for nester sighandlers
-	exit 255;
+	exit $code;
 }
 
 sub new {
 	my $pkg = shift;
 	my $self = bless {
+		verbose       => 0,
 		max_die       => 10, # times
 		start_timeout => 5,  # seconds
 		exit_timeout  => 3,  # seconds
@@ -180,7 +191,7 @@ sub  AUTOLOAD {
 		if ( exists $self->{$name} ) {
 			return $self->{$name}
 		}
-		return;
+		return undef;
 	};
 	goto &$AUTOLOAD;
 }

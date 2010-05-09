@@ -1,20 +1,11 @@
 package Daemond::Parent;
 
-sub DEBUG () { 1 }
-sub DEBUG_SIG () { 1 }
+sub DEBUG () { 0 }
+sub DEBUG_SIG () { 0 }
 sub DEBUG_SLOW () { 0 }
-=for rem
-use constant::def DEBUG => 1;
-use constant::def +{
-	DEBUG_SC   => DEBUG || 0,
-	DEBUG_SIG  => DEBUG || 0,
-	DEBUG_SLOW => 0,#DEBUG || 0,
-};
-=cut
 
 use uni::perl ':dumper';
-use Daemond::Base;
-BEGIN { push our @ISA, 'Daemond::Base' }
+use base 'Daemond::Base';
 
 use Time::HiRes qw(time sleep);
 use POSIX qw(WNOHANG);
@@ -187,10 +178,10 @@ sub daemonize {
 	$self->d->say("<g>starting up</>... (pidfile = ".$self->d->pid->file.", pid = <y>$$</>, detach = ".$self->d->detach.")");
 	$self->log->prefix("$$ PARENT: ");
 	if ($self->d->detach) {
-		$self->log->debug("Do detach");
+		$self->log->debug("Do detach") if $self->d->verbose > 1;
 		Daemond::Daemonization->process($self);
 	} else {
-		$self->log->debug("Don't detach from terminal");
+		$self->log->debug("Don't detach from terminal") if $self->d->verbose > 1;
 	}
 }
 
@@ -262,10 +253,11 @@ sub check_scoreboard {
 		$check{$alias} ||= 0;
 		$check{$alias} != $count and do {
 			$update{$alias} = $count - $check{$alias};
-			$self->log->debug("actual childs for $alias ($check{$alias}) != required count ($count). change by $update{$alias}");
+			$self->log->debug("actual childs for $alias ($check{$alias}) != required count ($count). change by $update{$alias}")
+				if $self->d->verbose > 1;
 		};
 	}
-	$self->log->debug( "Update: %s",join ', ',map { "$_+$update{$_}" } keys %update ) if %update;
+	$self->log->debug( "Update: %s",join ', ',map { "$_+$update{$_}" } keys %update ) if %update and $self->d->verbose > 1;
 	while ( my ($alias, $count) = each %update ) {
 		if ( $count > 0 ) {
 			$self->start_workers($alias, $count);
@@ -334,7 +326,8 @@ sub fork : method {
 	
 	if ($pid) {                         # successful fork; parent keeps track
 		$self->{chld}{$pid} = [ $slot, $alias ];
-		$self->log->debug( "Parent server forked a new child $alias [slot=$slot]. children: (".join(' ', $self->childs).")" );
+		$self->log->debug( "Parent server forked a new child $alias [slot=$slot]. children: (".join(' ', $self->childs).")" )
+			if $self->d->verbose > 0;
 		$self->{_}{live_check}{$pid} = 1;
 
 		if( $self->{_}{forks} == 0 and $self->{_}{startup} ) {
@@ -404,21 +397,21 @@ sub shutdown {
 	my %chld = %{$self->{chld}};
 	if ( $self->{chld} and %chld  ) {
 		# tell children to go away
-		$self->log->debug("TERM'ing children [@{[ keys %chld ]}]");
+		$self->log->debug("TERM'ing children [@{[ keys %chld ]}]") if $self->d->verbose > 1;
 		kill TERM => $_ or delete($chld{$_}),$self->warn("Killing $_ failed: $!") for keys %chld;
 	}
 	
 	DEBUG_SLOW and sleep(2);
 	$self->next::method(@_);
 	
-	$self->log->debug("Reaping kids");
+	$self->log->debug("Reaping kids") if $self->d->verbose > 1;
 	my $timeout = $self->d->exit_timeout + 1;
 	while (1) {
 		my $kid = waitpid ( -1,WNOHANG );
 		( DEBUG or DEBUG_SIG ) and $kid > 0 and $self->log->notice("reaping $kid");
 		delete $chld{$kid} if $kid > 0;
 		if ( time - $finishing > $timeout ) {
-			warn "Timeout $timeout exceeded, killing rest of processes @{[ keys %chld ]}\n";
+			$self->log->alert( "Timeout $timeout exceeded, killing rest of processes @{[ keys %chld ]}" );
 			kill KILL => $_ or delete($chld{$_}) for keys %chld;
 			last;
 		} else {
@@ -426,7 +419,7 @@ sub shutdown {
 			sleep(0.01);
 		}
 	}
-	$self->log->debug("Finished");
+	$self->log->debug("Finished") if $self->d->verbose;
 	$self->d->exit;
 }
 

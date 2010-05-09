@@ -6,7 +6,7 @@ use Log::Any ();
 sub new {
 	my $self = bless {}, shift;
 	$self->{log} = shift;
-	$self->{caller} = 0;
+	$self->{caller} = 1;
 	$self;
 }
 

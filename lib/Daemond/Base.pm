@@ -10,24 +10,11 @@ use accessors::fast (
 # _ - 
 # TODO: ipc
 
-#use Rambler::Daemon::Scoreboard ':const';
-use Hash::Union 'union';
-use Sub::Name;
-
-=for rem
-use constant::def DEBUG => Rambler::Daemon::DEBUG || 0;
-use constant::def +{
-	DEBUG_SC   => DEBUG || Rambler::Daemon::DEBUG_SC   || 0,
-	DEBUG_SIG  => DEBUG || Rambler::Daemon::DEBUG_SIG  || 0,
-	DEBUG_SLOW => DEBUG || Rambler::Daemon::DEBUG_SLOW || 0,
-};
-=cut
-
 use Daemond::Log '$log';
-use subs qw(log die);
 sub log:method { $log }
 
 use Daemond::Proc;
+use Daemond::D;
 
 BEGIN {
 	*usleep = sub (;$) { select undef,undef,undef,$_[0] || 0.2 };
@@ -56,7 +43,7 @@ sub init_sig_die {
 	if (defined $oldsigdie and UNIVERSAL::isa($oldsigdie, 'Daemond::SIGNAL')) {
 		undef $oldsigdie;
 	}
-	$SIG{__DIE__} = subname 'SIGDIE' => sub {
+	$SIG{__DIE__} = sub {
 		CORE::die shift,@_ if $^S;
 		CORE::die shift,@_ if $_[0] =~ m{ at \(eval \d+\) line \d+.\s*$};
 		$self->{_}{shutdown} = $self->{_}{die} = 1;
@@ -74,7 +61,7 @@ sub init_sig_die {
 	if (defined $oldsigwrn and UNIVERSAL::isa($oldsigwrn, 'Daemond::SIGNAL')) {
 		undef $oldsigwrn;
 	}
-	$SIG{__WARN__} = subname 'SIG:WARN' => sub {
+	$SIG{__WARN__} = sub {
 		if ($self and $self->log) {
 			local $_ = "@_";
 			s{\n+$}{};

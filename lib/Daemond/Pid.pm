@@ -10,8 +10,8 @@ use Scalar::Util qw(weaken);
 
 use Daemond::Helpers;
 use Daemond::Log '$log';
+use Daemond::D;
 
-sub d();
 sub log { $log }
 
 our %REGISTRY;
@@ -59,7 +59,7 @@ sub lock {
 	
 	if (-e $pidfile) {
 		if ($self->{locked} = $self->do_lock) {
-			warn "Locked existing file";
+			#warn "Locked existing file";
 			chomp( my $pid = do { open my $p,'<',$pidfile; local $/; <$p> }  );
 			if ($pid) {
 				#warn "$appname - have stalled (not locked) pidfile with pid $pid\n";
@@ -85,10 +85,10 @@ sub lock {
 		}
 	}
 	if ($self->{locked}) {
-		$self->log->notice("$$: Pidfile `$pidfile' was locked");
-		print { $self->{pidhandle} } "$$\n" or die "Couldn't write pid to pidfile `$pidfile': $!";
+		$self->log->notice("$$: Pidfile `$pidfile' was locked") if $self->d->verbose;
 		flock $self->{pidhandle},LOCK_EX | LOCK_NB or croak "Relock failed: $!";
 		$self->{owner} = $$;
+		$self->write();
 	}
 	return $self->{locked};
 }
@@ -116,7 +116,6 @@ sub check_existing {
 			sleep(2) if -M $pidfile < 2/86400;
 			if (-e $pidfile) {
 				my $oldpid = do { open my $p,'<',$pidfile or die "$!"; local $/; <$p> };
-				warn "Old: $oldpid";
 				chomp($oldpid);
 				if ($oldpid) {
 					$self->{old} = $oldpid;
@@ -171,7 +170,7 @@ sub do_lock {
 			$self->{pidhandle} = $f;
 			select( (select($f),$|=1)[0] );
 		}else{
-			$self->log->debug("$$: Lock failed: $!");
+			$self->log->debug("$$: Lock failed: $!") if $self->d->verbose;
 			close $f unless $r;
 		}
 	}
@@ -207,7 +206,8 @@ sub read : method {
 sub unlink : method {
 	my $self = shift;
 	if (-e $self->{pidfile}) {{
-		$self->log->notice("$$: Unlinking pidfile `$self->{pidfile}'");
+		$self->log->notice("$$: Unlinking pidfile `$self->{pidfile}'")
+			if $self->d->verbose;
 		my ($u,$g) = (stat $self->{pidfile})[4,5];
 		unlink $self->{pidfile} and last or $self->log->warn( "$$: Can't unlink $self->{pidfile}(uid=$UID{$u}, gid=$GID{$g}): $!" );
 		open my $f, '>', $self->{pidfile} or $self->log->warn( "$$: Can't open $self->{pidfile} for writing"),last;
