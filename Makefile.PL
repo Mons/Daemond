@@ -6,6 +6,8 @@ author   'Mons Anderson <mons@cpan.org>';
 license  'perl';
 
 build_requires 'Test::More';
+requires 'Log::Any';
+requires 'Sys::Mmap';
 
 auto_install;
 

@@ -53,7 +53,11 @@ sub init_sig_die {
 			$trace .= "\t$c[3] at $c[1] line $c[2].\n";
 		}
 		my $msg = "@_";
-		$self->log->critical("$$: pp=%s, DIE: %s\n\t%s",getppid(),$msg,$trace);
+		if ( $self->log->is_null ) {
+			print STDERR $msg;
+		} else {
+			$self->log->critical("$$: pp=%s, DIE: %s\n\t%s",getppid(),$msg,$trace);
+		}
 		goto &$oldsigdie if defined $oldsigdie;
 		$self->d->exit( 255 );
 	};
@@ -62,7 +66,7 @@ sub init_sig_die {
 		undef $oldsigwrn;
 	}
 	$SIG{__WARN__} = sub {
-		if ($self and $self->log) {
+		if ($self and !$self->log->is_null) {
 			local $_ = "@_";
 			s{\n+$}{};
 			$self->log->warning($_);

@@ -10,6 +10,12 @@ sub new {
 	$self;
 }
 
+sub is_null {
+	my $self = shift;
+	my $logger = Log::Any->get_logger( category => scalar caller() );
+	return ref $logger eq 'Log::Any::Adapter::Null' ? 1 : 0;
+}
+
 our %METHOD = map { $_ => 1 } Log::Any->logging_methods(),Log::Any->logging_aliases;
 sub prefix {
 	my $self = shift;
