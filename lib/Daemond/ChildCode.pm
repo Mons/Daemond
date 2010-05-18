@@ -20,14 +20,14 @@ sub run {
 		} else {
 			warn "Stop by USR2";
 			$self->{_}{shutdown} = 1;
-			die \("STOP");
+			die bless \do{my $o}, 'Daemond::ChildCode::STOPException';
 		}
 	};
 	eval{ 
 		$CODE->($self);
 	};
 	if(my $e = $@) {
-		if (ref $e and $$e eq 'STOP') {
+		if (ref $e and UNIVERSAL::isa($e, 'Daemond::ChildCode::STOPException')) {
 			$self->log->notice("STOP Exception");
 		} else {
 			die $e;
