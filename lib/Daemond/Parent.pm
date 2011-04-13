@@ -206,6 +206,7 @@ sub run {
 	$self->init_sig_die;
 	$self->init_sig_handlers;
 	$self->start;
+	$self->score->size > 0 or die "Scoreboard not set, possible misconfiguration. Did you forget to call next::method for start()?\n";
 	$self->log->notice("Started ($$)!");
 	while ( 1 ) {
 		$self->d->proc->action('idle');
