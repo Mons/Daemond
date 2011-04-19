@@ -22,6 +22,37 @@ sub prefix {
 	$self->{prefix} = shift;
 }
 
+=for rem
+{
+	no strict 'refs';
+	for my $method ( Log::Any->logging_methods() ) {
+		*$method = sub {
+			my $self = $_[0];
+			$_[0] = $self->{log};
+			my $can = $self->{log}->can($method);
+			print STDERR "call $method @_\n";
+			#no warnings 'redefine';
+			*$method = sub {
+				my $self = $_[0];
+				my ($file,$line) = (caller)[1,2];
+				@_ = ($self->{log}, $self->{prefix}.$_[1].($self->{caller} ? " [$file:$line]" : ''), @_ > 2 ? (@_[2..$#_]) : ());
+				goto &$can;
+			};
+			goto &$method;
+		};
+	}
+}
+
+sub AUTOLOAD {}
+
+=for rem
+=cut
+
+sub can1 {
+	my $self = shift;
+	$self->{log}->can(@_);
+}
+
 our $AUTOLOAD;
 sub  AUTOLOAD {
 	my $self = $_[0];
@@ -46,12 +77,14 @@ sub  AUTOLOAD {
 	}
 }
 
+#=cut
+
 sub DESTROY {}
 
 package Daemond::Log;
 
 use uni::perl;
-use Log::Any '$log';
+use Log::Any 0.12 '$log';
 
 sub import {
 	shift;
@@ -60,7 +93,40 @@ sub import {
 	no strict 'refs';
 	my $logger = Log::Any->get_logger(category => 'Daemond');
 	my $wrapper = Daemond::Log::Object->new( $logger );
-	*{ $caller.'::log'  } = \$wrapper;
+	*{ $caller.'::log' } = \$wrapper;
+}
+
+package Daemond::LogAnyAdapterScreen;
+BEGIN { $INC{'Daemond/LogAnyAdapterScreen.pm'} = __FILE__; }
+
+use uni::perl;
+use parent qw(Log::Any::Adapter::Core);
+
+sub new { bless {@_},shift }
+
+{
+	no strict 'refs';
+	for my $method ( Log::Any->logging_methods() ) {
+		#warn "Create method $method";
+		*$method = sub {
+			shift;
+			my $msg = shift;
+			if (@_ and index($msg,'%') > -1) {
+				$msg = sprintf $msg, @_;
+			}
+			$msg =~ s{\n*$}{\n};
+			print STDOUT "[\U$method\E] ".$msg;
+		};
+	}
+	my %aliases  = Log::Any->log_level_aliases;
+	for my $method ( keys %aliases ) {
+		#warn "Create alias $method for $aliases{$method}";
+		#*$method = \&{ $aliases{ $method } };
+	}
+	for my $method ( Log::Any->detection_methods() ) {
+		no strict 'refs';
+		*$method = sub () { 1 };
+	}
 }
 
 

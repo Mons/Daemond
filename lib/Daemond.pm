@@ -326,7 +326,18 @@ sub import {
 			splice @args, $i,1;
 		}
 		elsif ($_ eq '-child') {
-			(undef,$opts{child}) = splice @args, $i,2;
+			warn "Setup child [@args] $opts{parent} ".dumper [ keys %REGISTRY ];
+			if (!@args or substr($args[0],0,1) eq '-') {
+				if ( keys %REGISTRY == 1 ){ 
+					($opts{child}) = keys %REGISTRY;
+					shift @args;
+				} else {
+					die "Can't define for which parent this `$clr' is child for. Define as -child => 'Parent::Class'\n";
+				}
+			} else {
+				(undef,$opts{child}) = splice @args, $i,2;
+			}
+			warn "use $clr as child for $opts{child}";
 		}
 		elsif ($_ eq '-base') {
 			(undef,$opts{base}) = splice @args, $i,2;
@@ -350,14 +361,14 @@ sub import {
 			delete ${$clr.'::'}{child}{CODE};
 			return;
 		};
-		for (qw(name children verbose cli proc signals)) {
+		for (qw(name children verbose cli proc signals pid)) {
 			*{ $clr .'::'.$_ }  = $pkg->_import_conf_gen($_);
 		}
 	}
 	elsif (exists $opts{child}) {
 		$opts{base} ||= 'Daemond::Child';
 		eval qq{use $opts{base}; 1} or die "$@";
-		push @{ $clr.'::ISA' }, $opts{base};
+		push @{ $clr.'::ISA' }, $opts{base} unless UNIVERSAL::isa( $clr, $opts{base} );
 		if ($opts{child}) {
 			if (exists $REGISTRY{ $opts{child} }) {
 				my $d = $REGISTRY{ $opts{child} };

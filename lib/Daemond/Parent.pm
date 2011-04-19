@@ -40,6 +40,16 @@ sub init {
 
 sub childs { keys %{ shift->{chld} } }
 
+sub getopt_params {
+	my $self = shift;
+	my $opts = shift;
+	return (
+		"nodetach|f!"  => sub { $opts->{detach} = 0 },
+		"children|c=i" => sub { shift;$opts->{children} = shift },
+		"verbose|v+"   => sub { $opts->{verbose}++ },
+		'exit-on-error|x=i' => \$opts->{max_die},
+	)
+}
 sub getopt {
 	my $self = shift;
 	my %opts = (
@@ -47,9 +57,10 @@ sub getopt {
 		verbose => 0,
 	);
 	GetOptions(
-		"nodetach|f!"  => sub { $opts{detach} = 0 },
-		"children|c=i" => sub { shift;$opts{children} = shift },
-		"verbose|v+"   => sub { $opts{verbose}++ },
+		$self->getopt_params(\%opts)
+#		"nodetach|f!"  => sub { $opts{detach} = 0 },
+#		"children|c=i" => sub { shift;$opts{children} = shift },
+#		"verbose|v+"   => sub { $opts{verbose}++ },
 		#"nodebug!" => sub { $ND = 1 },
 	); # TODO: catch errors
 	$self->d->configure(%opts);
@@ -132,8 +143,8 @@ sub SIGCHLD {
 					$self->score->drop($slot);
 					if ($died) {
 						$self->{_}{dies}++;
-						if ($self->{_}{dies} > $self->d->max_die * $self->chld_count ) {
-							$self->log->critical("Childs repeatedly died %d times, stopping",$self->{_}{dies});
+						if ($self->{_}{dies} + 1 > ( $self->d->max_die ) * $self->chld_count ) {
+							$self->log->critical("Children repeatedly died %d times, stopping",$self->{_}{dies});
 							$self->stop();
 						}
 					} else {
@@ -175,7 +186,13 @@ use Daemond::Daemonization;
 sub daemonize {
 	my $self = shift;
 	#warn dumper $self->d;
-	$self->d->say("<g>starting up</>... (pidfile = ".$self->d->pid->file.", pid = <y>$$</>, detach = ".$self->d->detach.")");
+	$self->d->say("<g>starting up</>... (pidfile = ".$self->d->pid->file.", pid = <y>$$</>, detach = ".$self->d->detach.", log is null: ".$self->log->is_null.")");
+	if( $self->log->is_null ) {
+		#$self->d->warn("You are using null Log::Any. You will see no logs. Maybe you need to set up is with Log::Any::Adapter");
+		$self->d->warn("You are using null Log::Any. We just setup a simple screen adapter. Maybe you need to set it up with Log::Any::Adapter?");
+		require Log::Any::Adapter;
+		Log::Any::Adapter->set('+Daemond::LogAnyAdapterScreen');
+	}
 	$self->log->prefix("$$ PARENT: ");
 	if ($self->d->detach) {
 		$self->log->debug("Do detach") if $self->d->verbose > 1;
@@ -201,12 +218,18 @@ sub start {
 
 sub run {
 	my $self = shift;
+	$self->d->pid->translate;
 	$self->check_env;
 	$self->daemonize;
 	$self->init_sig_die;
 	$self->init_sig_handlers;
 	$self->start;
-	$self->score->size > 0 or die "Scoreboard not set, possible misconfiguration. Did you forget to call next::method for start()?\n";
+	
+	$self->score->size > 0 or $self->d->die("Scoreboard not set, possible misconfiguration. Did you forget to call next::method for start()?");
+	defined $self->d->child_class or $self->d->die( "Misconfiguration: child_class not defined" );
+		$self->d->child_class->can('new') or $self->d->die( "Misconfiguration: child_class not instantiable (have no `new' method)" );
+		$self->d->child_class->can('run') or $self->d->die( "Misconfiguration: child_class not runnable (have no `run' method)" );
+		
 	$self->log->notice("Started ($$)!");
 	while ( 1 ) {
 		$self->d->proc->action('idle');
@@ -374,7 +397,9 @@ sub fork : method {
 			#warn "New child ".$child->score->child." is: ".$child->score.' = '.Dumper($child->score);
 			#$child->create_session();
 			#$child->ipc->create_session;
-			$child->_run();
+			{
+				$child->_run();
+			}
 			1;
 		}) {
 			$child->log->notice("Child correctly finished");

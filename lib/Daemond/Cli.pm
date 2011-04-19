@@ -22,9 +22,10 @@ sub usage {
 $self->d->sayn(<<EOF);
 <b><red>Usage: $cmd [options] [start|stop|restart|check]
     Options:
-        -v,   --verbose      - increase verbosity level
-        -f,   --nodetach     - run in nodetach mode
-        -c N, --children N   - redefine count of children
+        -v,   --verbose        - increase verbosity level
+        -f,   --nodetach       - run in nodetach mode
+        -c N, --children N     - redefine count of children
+        -x N, --exit-on-error  - exit after N child errors
 </>
 EOF
 ;

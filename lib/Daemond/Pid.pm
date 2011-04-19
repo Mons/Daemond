@@ -52,10 +52,28 @@ sub new {
 	return $self;
 }
 
+sub translate {
+	my $self = shift;
+	$self->{pidfile} =~ s{%([nu])}{do{
+		if ($1 eq 'n') {
+			$self->d->name or croak "Can't assign '%n' into pid: Don't know daemon name yet";
+		}
+		elsif($1 eq 'u') {
+			scalar getpwuid($<);
+		}
+		else {
+			'%'.$1;
+		}
+	}}sge;
+}
+
 sub lock {
 	my $self = shift;
 	my $appname = $self->d->name;
 	my $pidfile = $self->{pidfile};
+	$pidfile =~ '%' and die "Pidfile contain non-translated entity\n";
+	
+	$self->d->say("Lock $pidfile");
 	
 	if (-e $pidfile) {
 		if ($self->{locked} = $self->do_lock) {

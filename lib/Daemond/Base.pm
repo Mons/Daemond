@@ -44,15 +44,23 @@ sub init_sig_die {
 		undef $oldsigdie;
 	}
 	$SIG{__DIE__} = sub {
-		CORE::die shift,@_ if $^S;
+		do {
+			my $S = defined $^S ? $^S : "undef";
+			my $i = 0;
+			my @c;
+			1 while (@c = caller($i++) and $c[1] =~ /\(eval \d+\)/);
+			print STDERR "Got inside sigdie ($S) @_ from @{[ @c[1,2] ]} [old err: $@]\n";
+		} if 0;
+		CORE::die shift,@_ if !defined $^S or $^S;
 		CORE::die shift,@_ if $_[0] =~ m{ at \(eval \d+\) line \d+.\s*$};
 		$self->{_}{shutdown} = $self->{_}{die} = 1;
+		#print STDERR "Got inside sigdie ($^S) @_ ($^S) from @{[ (caller 0)[1,2] ]}\n";
+		my $msg = "@_";
 		my $trace = '';
 		my $i = 0;
 		while (my @c = caller($i++)) {
 			$trace .= "\t$c[3] at $c[1] line $c[2].\n";
 		}
-		my $msg = "@_";
 		if ( $self->log->is_null ) {
 			print STDERR $msg;
 		} else {
@@ -66,16 +74,29 @@ sub init_sig_die {
 		undef $oldsigwrn;
 	}
 	$SIG{__WARN__} = sub {
+		local $Carp::Internal{Daemond} = 1;
+		local $Carp::Internal{'Daemond::Child'} = 1;
+		local $Carp::Internal{'Daemond::Parent'} = 1;
+		
 		if ($self and !$self->log->is_null) {
 			local $_ = "@_";
-			s{\n+$}{};
-			$self->log->warning($_);
+			s{(?: at .+? line \d+.|)\n+$}{};
+			#s{$}{' at '. join(' line ', (caller 0)[1,2] ) .".\n" }e;
+			#warn "Catched warn [@_]/[$_]";
+			if (my $w = $self->log->can('warning')) {
+				@_ = ($self->log, $_);
+				goto &$w;
+			} else {
+				$self->log->warning("$_");
+				#Carp::carp("$$: $_ (log can't method <warning>)")
+			}
+			#$self->log->warning($_);
 		}
 		elsif (defined $oldsigwrn) {
 			goto &$oldsigwrn;
 		}
 		else {
-			CORE::warn("$$: @_");
+			Carp::carp("$$: @_");
 		}
 	};
 	bless ($SIG{__WARN__}, 'Daemond::SIGNAL');
@@ -158,9 +179,9 @@ sub create_session {
 	# $self->ipc( Daemond::IPC->new() ) unless $self->ipc;
 }
 
-sub run {
-	confess "Redefine run in subclass";
-}
+#sub run {
+#	confess "Redefine run in subclass";
+#}
 
 sub ipc_message {
 	my $self = shift;

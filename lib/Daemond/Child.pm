@@ -101,9 +101,9 @@ sub stop {
 	$self->stop_flag;
 }
 
-sub run {
-	croak "Redefine run in subclass";
-}
+#sub run {
+#	croak "Redefine run in subclass";
+#}
 
 sub run2 {
 	my $self = shift;

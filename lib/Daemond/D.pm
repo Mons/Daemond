@@ -55,8 +55,12 @@ sub say:method {
 			$LASTSAY = 0;
 		}
 	}
-	printf STDOUT $msg, @_;
+	if (@_ and index($msg,'%') > -1) {
+		$msg = sprintf $msg, @_;
+	}
+	print STDOUT $msg;
 }
+
 sub sayn {
 	my $self = shift;
 	my $color = -t STDOUT;
@@ -73,7 +77,16 @@ sub sayn {
 		}
 	}
 	$msg .= "\033[0m\n" if $LASTSAY;
-	printf STDOUT $msg, @_;
+	if (@_ and index($msg,'%') > -1) {
+		$msg = sprintf $msg, @_;
+	}
+	print STDOUT $msg;
+}
+
+sub warn:method {
+	my $self = shift;
+	my $msg = shift;
+	$self->say('<r>'.$msg,@_);
 }
 
 sub die:method {
