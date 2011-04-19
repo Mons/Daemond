@@ -22,37 +22,6 @@ sub prefix {
 	$self->{prefix} = shift;
 }
 
-=for rem
-{
-	no strict 'refs';
-	for my $method ( Log::Any->logging_methods() ) {
-		*$method = sub {
-			my $self = $_[0];
-			$_[0] = $self->{log};
-			my $can = $self->{log}->can($method);
-			print STDERR "call $method @_\n";
-			#no warnings 'redefine';
-			*$method = sub {
-				my $self = $_[0];
-				my ($file,$line) = (caller)[1,2];
-				@_ = ($self->{log}, $self->{prefix}.$_[1].($self->{caller} ? " [$file:$line]" : ''), @_ > 2 ? (@_[2..$#_]) : ());
-				goto &$can;
-			};
-			goto &$method;
-		};
-	}
-}
-
-sub AUTOLOAD {}
-
-=for rem
-=cut
-
-sub can1 {
-	my $self = shift;
-	$self->{log}->can(@_);
-}
-
 our $AUTOLOAD;
 sub  AUTOLOAD {
 	my $self = $_[0];
