@@ -143,7 +143,7 @@ sub SIGCHLD {
 					$self->score->drop($slot);
 					if ($died) {
 						$self->{_}{dies}++;
-						if ($self->{_}{dies} + 1 > ( $self->d->max_die ) * $self->chld_count ) {
+						if ( $self->d->max_die > 0 and $self->{_}{dies} + 1 > ( $self->d->max_die ) * $self->chld_count ) {
 							$self->log->critical("Children repeatedly died %d times, stopping",$self->{_}{dies});
 							$self->stop();
 						}
