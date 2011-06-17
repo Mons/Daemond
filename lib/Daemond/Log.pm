@@ -84,7 +84,10 @@ sub new { bless {@_},shift }
 				$msg = sprintf $msg, @_;
 			}
 			$msg =~ s{\n*$}{\n};
-			print STDOUT "[\U$method\E] ".$msg;
+			{
+				no warnings 'utf8';
+				print STDOUT "[\U$method\E] ".$msg;
+			}
 		};
 	}
 	my %aliases  = Log::Any->log_level_aliases;
