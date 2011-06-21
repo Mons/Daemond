@@ -4,7 +4,13 @@ use uni::perl ':dumper';
 
 our $CODE;
 
-use Daemond -child;
+use parent 'Daemond::Child';
+#use Daemond -child;
+
+sub set_code {
+	shift;
+	$CODE = shift;
+}
 
 sub stop_flag {
 	my $self = shift;

@@ -449,4 +449,9 @@ sub shutdown {
 	$self->d->exit;
 }
 
+sub child_code {
+	my $self = shift;
+	
+}
+
 1;

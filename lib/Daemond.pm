@@ -306,11 +306,14 @@ Child should exit within a given timeout (not handled for long-running XS subs, 
 
 our %CONF;
 our %REGISTRY;
+sub parent_class { 'Daemond::Parent' }
+sub child_class { 'Daemond::Child' }
+sub childcode_class { 'Daemond::ChildCode' }
 
 sub import {
 	my $pkg = shift;
-	my @args = @_ or return;
 	my $clr = caller;
+	my @args = @_ or return;
 	my %opts;
 	my $i = 0;
 	while ($i < @args) {
@@ -346,18 +349,22 @@ sub import {
 			++$i;
 		}
 	}
+	my $clr = caller;
 	no strict 'refs';
 	if ($opts{parent}) {
-		$opts{base} ||= 'Daemond::Parent';
+		$opts{base} ||= $pkg->parent_class;
 		eval qq{use $opts{base}; 1} or die "$@";
 		push @{ $clr.'::ISA' }, $opts{base};
 		$REGISTRY{ $clr } = d();
 		*{ $clr .'::child' } = sub (&) {
 			my $code = shift;
+			my $childcode_class = $pkg->childcode_class;
+			eval "require $childcode_class;1" or die $@;
 			require Daemond::ChildCode;
-			$Daemond::ChildCode::CODE = $code;
+			$childcode_class->set_code($code);
+			#$Daemond::ChildCode::CODE = $code;
 			#*{ 'Daemond::ChildCode::d' } = sub () { $d };
-			d->child_class('Daemond::ChildCode');
+			d->child_class($childcode_class);
 			delete ${$clr.'::'}{child}{CODE};
 			return;
 		};
@@ -366,7 +373,7 @@ sub import {
 		}
 	}
 	elsif (exists $opts{child}) {
-		$opts{base} ||= 'Daemond::Child';
+		$opts{base} ||= $pkg->child_class;
 		eval qq{use $opts{base}; 1} or die "$@";
 		push @{ $clr.'::ISA' }, $opts{base} unless UNIVERSAL::isa( $clr, $opts{base} );
 		if ($opts{child}) {
