@@ -14,7 +14,8 @@ sub set_code {
 
 sub stop_flag {
 	my $self = shift;
-	kill USR2 => $$;
+	warn "Stop flag in childcode";
+	kill USR2 => $$ or warn "Can't 'kill' myself with USR2: $!";
 }
 
 sub run {

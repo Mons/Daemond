@@ -24,6 +24,8 @@ sub SIGTERM {
 	if($self->{_}{shutdown}) {
 		$self->log->warn("Received TERM during shutdown, force exit");
 		$self->d->exit( 1 );
+	} else {
+		$self->log->warn("Received TERM...");
 	}
 	$self->stop();
 }
