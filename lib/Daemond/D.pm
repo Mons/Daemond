@@ -115,7 +115,7 @@ sub new {
 		pid           => Daemond::Void->new(),
 		proc          => Daemond::Void->new(),
 		cli           => Daemond::Void->new(),
-		signals       => [qw(TERM INT HUP USR1 USR2 CHLD)],
+		signals       => [qw(TERM INT HUP USR1 USR2 CHLD PIPE)],
 		@_
 	}, $pkg;
 	return $self;

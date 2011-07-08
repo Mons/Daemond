@@ -30,6 +30,10 @@ sub SIGTERM {
 	$self->stop();
 }
 
+sub SIGPIPE {
+	# IGNORE
+}
+
 sub SIGINT {
 	# IGNORE
 }
