@@ -151,10 +151,10 @@ sub redirect_output {
 	close STDOUT; open STDOUT, '>', '/dev/null' or die "open STDOUT > /dev/null failed: $!";
 	close STDERR; open STDERR, '>', '/dev/null' or die "open STDERR > /dev/null failed: $!";
 	if ($self->d->verbose > 0) {
-		tie *STDERR, 'Daemond::Handle', sub { $self->log->warning($_[0]) };
+		tie *STDERR, 'Daemond::Tie::Handle', sub { $self->log->warning($_[0]) };
 	}
 	if ( $self->d->verbose > 1 ) {
-		tie *STDOUT, 'Daemond::Handle', sub { $self->log->notice($_[0]) };
+		tie *STDOUT, 'Daemond::Tie::Handle', sub { $self->log->notice($_[0]) };
 	}
 	#$self->log->notice("std* fileno = %d, %d, %d", fileno STDIN, fileno STDOUT, fileno STDERR);
 	$self->log->warn( "Logging initialized" );
