@@ -178,7 +178,31 @@ interface:
 
 $obj->{log method not alias}( $NUM_LVL, $STR_LVL, \@localtime, $message )
 
+
+default date format = %Y-%m-%dT%H:%M:%S.%3N
+
+sub logstrftime($format,$hirespart,$evoft ...) {
+	if ($hirespart) {
+		return strftime($format).".".sprintf($hirespart)
+	}
+}
+
+$host, $prog, $level, $$, $date, $message
+
+{hostname} {level} {date} {message}
+format -> "%1$s %3$s %5$s $6$s"
+
+{hostname} {level} {message}
+format -> "%1$s %3$s $5$s"
+
+
+if ($self->{date_format}) {
+	$date = strftime($date_format, @{ \@localtime });
+}
+sprintf $format, $host, $prog, $level, $$, $date, $message;
+
 =cut
+
 
 
 1;
@@ -200,6 +224,7 @@ logger:
 			facility: local0
 			level: warn
 			hires: 1
+			format: "{hostname} {progname} {pid} {level} {date:%Y-%m-%d} {message}"
 		screen:
 			level: debug
 		file:
